@@ -34,6 +34,7 @@
 #include <tiny-cuda-nn/encodings/frequency.h>
 #include <tiny-cuda-nn/encodings/myfrequency.h>
 #include <tiny-cuda-nn/encodings/grid.h>
+#include <tiny-cuda-nn/encodings/mygrid.h>
 #include <tiny-cuda-nn/encodings/identity.h>
 #include <tiny-cuda-nn/encodings/oneblob.h>
 #include <tiny-cuda-nn/encodings/spherical_harmonics.h>
