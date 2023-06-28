@@ -125,8 +125,40 @@ public:
                 num_bins_log2,
                 input.view(),
                 output->pitched_ptr()
+            );
+            
+            // Padding
+            parallel_for_gpu_aos(
+                stream, 
+                input.n(), 
+                m_n_to_pad,
+                [m_n_output_dims=m_n_output_dims, out=output->pitched_ptr()] __device__ (size_t elem, size_t dim) {
+                    out(elem)[m_n_output_dims + dim] = (T)1.0f;
+                }
             )
 
+        } else {
+            const uint32_t min_n_threads = n_threads_linear;
+            const dim3 threads = {m_n_dims_to_encode, div_round_up(min_n_threads, m_n_dims_to_encode), 1};
+            const dim3 n_threads = threads.x * threads.y;
+            const dim3 blocks = {div_round_up(input.n() * m_n_dims_to_encode, n_threads), 1, 1};
+
+            kernel_one_blob_soa<T><<<blocks, threads, 0, stream>>> (
+                input.n(),
+                num_bins_log2,
+                m_n_dims_to_encode,
+                intput.view(),
+                output->data()
+            );
+
+            //padding
+            parallel_for_gpu(
+                stream,
+                input.n() * m_n_to_pad,
+                [out=output->data() + input.n() * m_n_dims_to_encode] __device__ (size_t i) {
+                    out[i] = (T)1.0f;
+                }
+            )
         }
         auto forward = std::make_unique<Context>();
 
@@ -135,15 +167,31 @@ public:
 
     void backward_impl(
         cudaStream_t stream,
-        const Context& ctx;
-        const GPUMatrixDynamic<float>&input,
+        const Context& ctx,
+        const GPUMatrixDynamic<float>& input,
         const GPUMatrixDynamic<T>&output,
         const GPUMatrixDynamic<T>& dL_doutput,
         GPUMatrixDynamic<float>* dL_dinput = nullptr,
         bool use_inference_params = false,
         EGradientMode param_gradients_mode = EGradientMode::Overwrite
     ) override {
+        if (!dL_dinput || set_padded_output_width() == 0) {
+            return;
+        }
+        const uint32_t num_bins_log2 = (uint32_t)std::log2(m_n_bins);
 
+        const uint32_t min_n_threads = n_threads_linear;
+        const dim3 threads = {m_n_dims_to_encode, div_round_up(min_n_threads, m_n_dims_to_encode), 1};
+        const uint32_t n_threads = threads.x * threads.y;
+        const dim3 blocks = {div_round_up(input.n() * m_n_dims_to_encode, n_threads), 1, 1};
+        
+        kernel_one_blob_backward<T><<<blocks, threads, 0, stream>>> (
+            input.n(),
+            m_n_dims_to_encode,
+            dL_doutput.view(),
+            input.view(),
+            dL_dinput->view()
+        );
     }
 
 
