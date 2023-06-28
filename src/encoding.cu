@@ -37,6 +37,7 @@
 #include <tiny-cuda-nn/encodings/mygrid.h>
 #include <tiny-cuda-nn/encodings/identity.h>
 #include <tiny-cuda-nn/encodings/oneblob.h>
+#include <tiny-cuda-nn/encodings/myoneblob.h>
 #include <tiny-cuda-nn/encodings/spherical_harmonics.h>
 #include <tiny-cuda-nn/encodings/triangle_wave.h>
 

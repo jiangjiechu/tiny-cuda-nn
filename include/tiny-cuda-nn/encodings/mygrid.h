@@ -156,7 +156,7 @@ __global__ void kernel_grid(
 
     if (level >= max_level + 1e-3f) {
         if (encoded_postions) {
-            TCNN_PRAGMA_UNROLL
+            #pragma unroll
             for (uint32_t f = 0; f < N_FEATURES_PER_LEVEL; ++f) {
                 encoded_postions[i + (level * N_FEATURES_PER_LEVEL + f) * num_elements] = (T) 0.0f;
             }
@@ -164,7 +164,7 @@ __global__ void kernel_grid(
 
         // Gradient is zero for zeroed-out dimensions
         if (dy_dx) {
-            TCNN_PRAGMA_UNROLL 
+            #pragma unroll
             for (uint32_t f = 0; f < N_FEATURES_PER_LEVEL; ++f) { 
                 ((vector_fullp_t<N_POS_DIMS>*)dy_dx)[i + (level * N_FEATURES_PER_LEVEL + f) * num_elements] = {0.0f};
             }
@@ -217,6 +217,36 @@ __global__ void kernel_grid(
 
         return;
     }
+
+    if (encoded_postions) {
+        // N-linear interpolation
+        vector_t<T, N_FEATURES_PER_LEVEL> result = {};
+
+        #pragma unroll
+        for (uint32_t idx = 0; idx < (1 << N_POS_DIMS); ++idx) {
+            float weight = 1;
+            uint32_t pos_grid_local[N_POS_DIMS];
+
+
+            #pragma unroll
+            for (uint32_t dim = 0; dim < N_POS_DIMS; ++dim) {
+                if ((idx & (1 << dim)) == 0) {
+                    weight *= 1 - pos[dim];
+                    pos_grid_local[dim] = pos_grid[dim];
+                } else {
+                    weight *= pos[dim];
+                    pos_grid_local[dim] = pos_grid[dim] + 1;
+                }
+            }
+            result = fma((T)weight, grid_val(pos_grid_local), result);
+        }
+        #pragma unroll
+        for (uint32_t f = 0; f < N_FEATURES_PER_LEVEL; ++f) {
+            encoded_postions[i + (level * N_FEATURES_PER_LEVEL + f) * num_elements] = result[f];
+        }
+    }
+
+    // Gradient
 
 
 }
