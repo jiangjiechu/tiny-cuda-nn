@@ -234,6 +234,7 @@ else()
 endif()
 list(APPEND CUDA_NVCC_FLAGS "--extended-lambda")
 list(APPEND CUDA_NVCC_FLAGS "--expt-relaxed-constexpr")
+set(CMAKE_CUDA_FLAGS_DEBUG "-G -g")
 
 
 ###############################################################################
