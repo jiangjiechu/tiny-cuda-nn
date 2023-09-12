@@ -221,7 +221,8 @@ __global__ void kernel_wavelet(
     }
 
     grid += offset_table.data[level] * N_FEATURES_PER_LEVEL;
-    const uint32_t hashmap_size = (offset_table.data[level + 1] - offset_table.data[level]) / ((1<<N_POS_DIMS) - 1);
+    const uint32_t blocks_in_level = level==0? 1: ((1<<N_POS_DIMS) - 1);
+    const uint32_t hashmap_size = (offset_table.data[level + 1] - offset_table.data[level]) / blocks_in_level;
     const float scale = grid_scale(level, 1, base_resolution);
     const uint32_t resolution = grid_resolution(scale);
     const uint32_t wave_length = get_wave_length<WAVE_TYPE>();
@@ -358,7 +359,8 @@ __global__ void kernel_wavelet_backward(
 		return;
 	}
     grid_gradient += offset_table.data[level] * N_FEATURES_PER_LEVEL;
-    const uint32_t hashmap_size = (offset_table.data[level + 1] - offset_table.data[level]) / ((1<<N_POS_DIMS)-1);
+    const uint32_t blocks_in_level = (level==0)? 1:((1<<N_POS_DIMS) - 1);
+    const uint32_t hashmap_size = (offset_table.data[level + 1] - offset_table.data[level]) / blocks_in_level;
 
     const float scale = grid_scale(level, 1.0f, base_resolution);
     const uint32_t resolution = grid_resolution(scale);
@@ -551,9 +553,12 @@ public:
             // +---------+---------+
             const uint32_t resolution = base_resolution * (1 << i);
 
+            uint32_t blocks_in_level = i == 0 ? 1 : (1<<N_POS_DIMS) - 1;
             uint32_t max_params = std::numeric_limits<uint32_t>::max()/2;
-			uint32_t params_in_level = std::pow((float)resolution, N_POS_DIMS) > (float)max_params ? max_params : powi(resolution, N_POS_DIMS);
-            params_in_level = std::min(params_in_level, (1u << log2_hashmap_size));
+			uint32_t params_in_level = std::pow((float)resolution, N_POS_DIMS) > (float)max_params ? (max_params-offset) : (powi(resolution, N_POS_DIMS) - offset);
+            params_in_level = (i==0) ? params_in_level : next_multiple(params_in_level, blocks_in_level);
+
+            params_in_level = std::min(params_in_level, (1u << log2_hashmap_size) * blocks_in_level);
 
             m_offset_table.data[i] = offset;
             offset += params_in_level;
@@ -563,7 +568,7 @@ public:
         m_offset_table.size = m_n_levels+1;
 
         m_wavefun_level = log2f(base_resolution) + m_n_levels + 1;
-        m_wavefun_level = min(m_wavefun_level, 10u);
+        m_wavefun_level = min(m_wavefun_level, 12u);
         m_n_params = m_offset_table.data[m_n_levels] * N_FEATURES_PER_LEVEL;
         m_n_output_dims = m_n_features;
         if (n_features % N_FEATURES_PER_LEVEL != 0) {
